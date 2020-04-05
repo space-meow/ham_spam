@@ -1,0 +1,677 @@
+\documentclass[a4paper]{article}
+
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage[a4paper,margin=1in,footskip=0.25in]{geometry}
+\usepackage{indentfirst}
+\graphicspath{{.}}
+
+
+\begin{document}
+
+	\title{IST 664 Final Project - "Ham" or "Spam" Classification}
+	\date{}
+	\author{Christopher DiPersio}
+	\maketitle
+	
+	\section{Introduction}
+	
+	"Spam" emails have plagued inboxes for years. Making all kinds of weird and often disturbing offers, the only value "spam" offers for most people is pure entertainment in their absurdity. However, for some that maybe do not understand the nature of the internet and the vast number of motivations of the people on it, "spam" can be quite dangerous scamming people out of thousands of dollars and ruining lives with a single click. Whether it be giving those less internet-savvy more information as to what to ignore or just keeping clutter out of inboxes for others, detecting "spam" and retaining "ham" is a vital problem to solve in this internet age. The focus of this project will be to solve that problem by applying different NLP techniques with NLTK's Naive Bayes implementation to detect "spam" and keep the "ham" flowing.
+	
+	\section{Setup and Data}
+	Setup for the below experiments was actually very minimal. The "corpus" folder containing the "spam" and "ham" emails was extracted into a new folder which contained a Jupyter Notebook on which all of the experiments were run. To allow the Jupyter Notebook to represent all steps taken throughout this entire project and greater control over the code executed, the script classifySPAM.py was examined and core components extracted into new functions in the Notebook. These functions were modified to accept and produce the kind of input and output the rest of the experiments would require.
+	
+	In total, there were 3,672 "ham" emails and 1,500 "spam" emails provided. Each email was in either a "spam" or "ham" folder and was also labeled at as such at the end of its file name. Due to the over two-to-one class imbalance between "ham" and "spam" emails, the "ham" ones were downsampled to 1,500. This eliminated any chance that the models would become inadvertently biased towards "ham" simply due to the number of examples.
+	
+	Diving deeper into the data, below are the top 15 most common tokens from both classes:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Top 15 Most Common Tokens}
+		\begin{tabular}{l|ll|ll}
+			Rank & Ham Token & Count  & Spam Token & Count \\
+			\hline
+			1    & -		 & 31,194 & .		   & 19,517 \\
+			2 	 & /		 & 15,806 & ,		   & 11,251 \\
+			3	 & .		 & 13,873 & -		   & 7,942 \\
+			4	 & :		 & 9,861  & :		   & 6,114 \\
+			5    & the		 & 7,728  & /		   & 5,707 \\
+			6    & to        & 6,232  & to         & 5,173 \\
+			7    & ect       & 6,017  & and		   & 4,917 \\
+			8    & @		 & 4,681  & of		   & 4,511 \\
+			9	 & for	  	 & 3,347  & ?		   & 4,107 \\
+			10   & >		 & 3,262  & a		   & 3,794 \\
+			11   & and		 & 3,248  & in		   & 3,147 \\
+			12   & hou		 & 3,143  & =		   & 3,091 \\
+			13	 & enron	 & 2,706  & you		   & 2,797 \\
+			14	 & a		 & 2,490  & for		   & 2,526 \\
+			15	 & on		 & 2,429  & !		   & 2,459
+		\end{tabular}
+	\end{table}
+
+	The vast majority of these tokens are punctuation marks and stop words, a detail which will be returned to later. In total, the "ham" emails contained 12,780 unique tokens and the "spam" emails 38,799 unique tokens. Across both classes, the total number of unique tokens was 44,914.
+	
+	\section{Models}
+	
+	\subsection{General Notes}
+	
+	All models below were evaluated using ten-fold cross validation, which produced a 2,700 email training set and 300 email testing set for each fold. Using this method, results never showed a large swing high or low in terms of any of the metrics in any of the folds suggesting the selection of this number of folds did not cause the models to over- or underfit on the training data. Results below are presented with average accuracy, precision, recall, and F1 scores. In cases where only one model was tested, it is also shown with a confusion matrix. In cases where a batch of models were tested all at once, the confusion matrix is shown for the best performing model.
+	
+	\subsection{Baseline Model}
+	
+	To get the cleanest idea of how a Naive Bayes model would perform, the baseline model was built only applying NLTK’s word\_tokenize() and using boolean representations of the top 2,000 tokens from both “spam” and “ham” emails as features. No tokens were lower cased; no stop words were removed. The model was as vanilla as it could possibly be. The results were surprisingly good. The average accuracy was 96.13\%. Fuller results are below:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Baseline Model Performance}
+		\begin{tabular}{l|lll}
+			& Precision & Recall & F1 \\
+			\hline
+			ham & 0.926 & 0.996 & 0.960 \\
+			spam & 0.997 & 0.931 & 0.963
+		\end{tabular}
+	\end{table}
+
+	Precision, recall, and F1 for both "ham" and "spam" were also very high. In total, though, the difference in subsequent F1 measure for both classes was negligible. The confusion matrix below shows only 116 emails were incorrectly classified:
+
+	\begin{table}[H]
+		\centering
+		\caption{Baseline Model Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,389 (46.3\%) & 111 (3.7\%) \\
+			spam & 5 (0.2\%) & 1,495 (49.8\%)
+		\end{tabular}
+	\end{table}
+
+	\subsection{Experiments}
+	
+	\subsubsection{Different Vocabulary Sizes on the Baseline Model}
+	
+	Achieving such astronomically high accuracy by basically doing nothing did not leave a whole lot of room for massive improvement, so rather than start by changing the tokenization or stop word strategy, the first experiment played with changing the vocabulary size from 2,000 tokens used in the baseline to 500, 1,000, 1,500, 3,000, 5,000, 7,5000, and 10,000. Results are below:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Baseline Model Performance with Variable Vocabulary Size}
+		\begin{tabular}{ll}
+			Vocabulary Size & Average Accuracy \\
+			\hline
+			500 & 94.10\% \\
+			1,000 & 94.80\% \\
+			1,500 & 95.67\% \\
+			3,000 & 96.37\% \\
+			5,000 & 95.43\% \\
+			7,500 & 94.67\% \\
+			10,000 & 93.37\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			Vocabulary Size & & Precision & Recall & F1 \\
+			\hline
+			500 & ham  & 0.883 & 0.998 & 0.937 \\
+			    & spam & 0.999 & 0.895 & 0.944 \\
+			\hline
+			1,000 & ham  & 0.897 & 0.999 & 0.945 \\
+			      & spam & 0.999 & 0.907 & 0.951 \\
+			\hline
+			1,500 & ham  & 0.915 & 0.999 & 0.955 \\
+			      & spam & 0.999 & 0.921 & 0.958 \\
+			\hline
+			3,000 & ham  & 0.935 & 0.992 & 0.963 \\
+				  & spam & 0.992 & 0.939 & 0.965 \\
+			\hline
+			5,000 & ham  & 0.943 & 0.965 & 0.954 \\
+			      & spam & 0.966 & 0.944 & 0.955 \\
+			\hline
+			7,500 & ham  & 0.951 & 0.943 & 0.947 \\
+			      & spam & 0.942 & 0.951 & 0.946 \\
+     		\hline
+			10,000 & ham  & 0.959 & 0.912 & 0.935 \\
+			       & spam & 0.908 & 0.957 & 0.932
+		\end{tabular}
+	\end{table}
+
+	Results showed slow improvement up to 3,000 tokens at which a point of diminishing returns was reached, and accuracy, precision, recal, and F1 began to slowly decrease. Of the vocabulary sizes tested including the original 2,000 tokens in the baseline model, 3,000 tokens was the best vocabulary size at 96.37\% average accuracy and around 0.96 F1 (generalizing across the F1 for "ham" and "spam" at that level). Below is the confusion matrix for this model shows that 109 emails were incorrectly classified, an improvement of seven emails:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Baseline Model with 3,000 Tokens Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,403 (46.8\%) & 97 (3.2\%) \\
+			spam & 12 (0.4\%) & 1,488 (49.6\%)
+		\end{tabular}
+	\end{table}
+
+	\subsubsection{Custom Tokenizer}
+	
+	After finding an optimal vocabulary size, the next experiment was to try out a custom tokenizer. An initial exploration of the data showed a weird handling of punctuation in where regardless of the punctuation mark, it was completely separated by spaces from all other tokens. The custom tokenizer tested here joins back apostrophes and hyphens to the alphanumeric characters surrounding them on both sides. It also removes a space after a dollar sign, the loose hypothesis being money may help play a roll in identifying "spam" emails. After these changes, the cleaned up email is passed to NLTK’s regexp\_tokenize() function along with a custom tokenization regular expression which looks for letter sequences, letter sequences which may have an apostrophe or hyphen between them, and digit sequences preceded by a dollar sign. The average accuracy was several points lower than the best version of the baseline model: 92.37\%. Precision, recall, and F1 also dropped several points, and the confusion matrix showed a jump of 229 emails incorrectly classified.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Custom Tokenizer Precision, Recall, \& F1}
+		\begin{tabular}{l|lll}
+			& Precision & Recall & F1 \\
+			\hline
+			ham & 0.941 & 0.910 & 0.925 \\
+			spam & 0.907 & 0.939 & 0.922
+		\end{tabular}
+	\end{table}
+	
+	\begin{table}[H]
+		\centering
+		\caption{Custom Tokenizer Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,411 (47.0\%) & 89 (3.0\%) \\
+			spam & 140 (4.7\%) & 1,360 (45.3\%)
+		\end{tabular}
+	\end{table}
+	
+	A similar model was also tried but this time removing stop words. The stop words list was NLTK’s default with the word “Subject” added since every email included a subject line. Performance decreased another couple points: 90.37\% average accuracy, around 0.9 F1, and 289 emails incorrectly classified.
+	
+	\begin{table}[H]
+	\centering
+	\caption{Custom Tokenizer with Stop Word Removal Precision, Recall, \& F1}
+	\begin{tabular}{l|lll}
+		& Precision & Recall & F1 \\
+		\hline
+		ham & 0.942 & 0.875 & 0.907 \\
+		spam & 0.865 & 0.937 & 0.900
+	\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{Custom Tokenizer with Stop Word Removal Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,413 (47.1\%) & 87 (2.9\%) \\
+			spam & 202 (6.7\%) & 1,298 (43.3\%)
+		\end{tabular}
+	\end{table}
+
+	\subsubsection{Standard Tokenizer with Adjustments}
+	
+	After seeing decreases in model performance with a custom tokenizer, focus was shifted back to NLTK’s default tokenizer but trying out some approaches attempted with the custom tokenizer. Two models were tested with the first one joining the dollar sign to its following character and the second doing the same but also removing a large set of other punctuation marks.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Standard Tokenizer with Adjustments Model Performance}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Joining Dollar Sign & 96.33\% \\
+			Joining Dollar Sign \& Removing Punctuation & 94.73\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+		\hline
+		\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Joining Dollar Sign & ham  & 0.937 & 0.989 & 0.962 \\
+							    & spam & 0.989 & 0.940 & 0.964 \\
+			\hline
+			Joining Dollar Sign \& Removing Punctuation & ham  & 0.934 & 0.960 & 0.947 \\
+														& spam & 0.961 & 0.936 & 0.948
+		\end{tabular}
+	\end{table}
+	
+	Keeping punctuation had the best performance but still not as high as the baseline model. Below is the confusion matrix for the model with all punctuation:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Joining Dollar Sign Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,406 (46.9\%) & 94 (3.1\%) \\
+			spam & 16 (0.5\%) & 1,484 (49.5\%)
+		\end{tabular}
+	\end{table}
+
+	\subsubsection{Stemming}
+	
+	Having tried several model iterations using base forms of the tokens, the next focus was placed on investigating if stemming could provide any sort of improvement over the baseline model with 3,000 words in its vocabulary. Two initial attempts were made at this. Both used NLTK’s PorterStemmer() and word\_tokenize() and had 3,000 words in their vocabularies; however, the second model changed the bag of words representation from booleans, which had been used up to now for all other models, to frequencies.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Stemmed Model Performance}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Stemming \& Tokenization & 94.93\% \\
+			Stemming, Tokenization, \& Frequencies & 95.43\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			\hline
+			\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Stemming \& Tokenization & ham  & 0.936 & 0.962 & 0.949 \\
+			& spam & 0.963 & 0.938 & 0.950 \\
+			\hline
+			Stemming, Tokenization, \& Frequencies & ham  & 0.937 & 0.971 & 0.954 \\
+			& spam & 0.972 & 0.939 & 0.955
+		\end{tabular}
+	\end{table}
+	
+	Next, variations on vocabulary size were investigated using the same vocabulary sizes as the same test above. Because the model using frequencies performed slightly better, the models below also used frequencies rather than boolean representations:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Stemmed Model Performance with Variable Vocabulary Size}
+		\begin{tabular}{ll}
+			Vocabulary Size & Average Accuracy \\
+			\hline
+			500 & 94.37\% \\
+			1,000 & 95.47\% \\
+			1,500 & 95.80\% \\
+			2,000 & 96.10\% \\
+			3,000 & 95.43\% \\
+			5,000 & 94.80\% \\
+			7,500 & 93.23\% \\
+			10,000 & 91.80\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			Vocabulary Size & & Precision & Recall & F1 \\
+			\hline
+			500 & ham  & 0.890 & 0.997 & 0.940 \\
+			    & spam & 0.997 & 0.901 & 0.947 \\
+			\hline
+			1,000 & ham  & 0.912 & 0.997 & 0.953 \\
+			      & spam & 0.997 & 0.919 & 0.957 \\
+			\hline
+			1,500 & ham  & 0.920 & 0.996 & 0.956 \\
+		   	      & spam & 0.996 & 0.926 & 0.960 \\
+ 	        \hline
+ 	        2,000 & ham  & 0.930 & 0.991 & 0.960 \\
+ 	              & spam & 0.992 & 0.934 & 0.962 \\
+			\hline
+			3,000 & ham  & 0.937 & 0.971 & 0.954 \\
+			      & spam & 0.972 & 0.939 & 0.955 \\
+			\hline
+			5,000 & ham  & 0.945 & 0.950 & 0.948 \\
+			      & spam & 0.951 & 0.946 & 0.948 \\
+			\hline
+			7,500 & ham  & 0.954 & 0.914 & 0.934 \\
+			      & spam & 0.911 & 0.952 & 0.931 \\
+			\hline
+			10,000 & ham  & 0.960 & 0.886 & 0.921 \\
+			       & spam & 0.876 & 0.956 & 0.914
+		\end{tabular}
+	\end{table}
+	
+	Similar to the non-stemmed vocabulary sizes, there is a point of diminishing returns, but it is one level back. 2,000 tokens yielded the best results at an average accuracy of 96.10\%, around 0.96 F1, and 117 emails incorrectly classified; both almost on par with the baseline model. Below is its confusion matrix:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Stemmed Model with 2,000 Tokens Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,395 (46.5\%) & 105 (3.5\%) \\
+			spam & 12 (0.4\%) & 1,488 (49.6\%)
+		\end{tabular}
+	\end{table}
+
+	\subsubsection{Bigrams}
+	
+	Still unable to surpass the accuracy of the baseline model with 3,000 tokens, the next set of models used bigrams rather than unigrams. The first experiment used frequency and PMI scored bigrams using word\_tokenize() and a set of vocabulary sizes to find out how many bigrams produced the best performing model:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Frequency-Scored Bigrams Model Performance with Variable Vocabulary Size}
+		\begin{tabular}{ll}
+			Vocabulary Size & Average Accuracy \\
+			\hline
+			100 & 81.13\% \\
+			500 & 87.37\% \\
+			1,000 & 89.45\% \\
+			2,500 & 93.83\% \\
+			5,000 & 95.57\% \\
+			7,500 & 96.03\% \\
+			10,000 & 96.57\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			Vocabulary Size & & Precision & Recall & F1 \\
+			\hline
+			100 & ham  & 0.637 & 0.978 & 0.771 \\
+				& spam & 0.986 & 0.731 & 0.839 \\
+			\hline
+			500 & ham  & 0.753 & 0.993 & 0.856 \\
+				& spam & 0.995 & 0.801 & 0.887 \\
+			\hline
+			1,000 & ham  & 0.794 & 0.994 & 0.883 \\
+				  &	spam & 0.995 & 0.829 & 0.904 \\
+		    \hline
+		    2,500 & ham  & 0.885 & 0.991 & 0.935 \\
+		    	  & spam & 0.992 & 0.896 & 0.941 \\
+		   	\hline
+		   	5,000 & ham  & 0.919 & 0.992 & 0.954 \\
+		   		  & spam & 0.993 & 0.924 & 0.957 \\
+		   	\hline
+		   	7,500 & ham  & 0.927 & 0.993 & 0.959 \\
+		   	      & spam & 0.993 & 0.932 & 0.962 \\
+ 	        \hline
+ 	        10,000 & ham  & 0.937 & 0.994 & 0.965 \\
+ 	        	   & spam & 0.994 & 0.941 & 0.967
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{PMI-Scored Bigrams Model Performance with Variable Vocabulary Size}
+		\begin{tabular}{ll}
+			Vocabulary Size & Average Accuracy \\
+			\hline
+			100 & 46.83\% \\
+			500 & 50.03\% \\
+			1,000 & 50.00\% \\
+			2,500 & 50.00\% \\
+			5,000 & 50.00\% \\
+			7,500 & 50.00\% \\
+			10,000 & 50.00\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			Vocabulary Size & & Precision & Recall & F1 \\
+			\hline
+			100 & ham  & 0.559 & 0.473 & 0.513 \\
+				& spam & 0.377 & 0.461 & 0.415 \\
+			\hline
+			500 & ham  & 1.000 & 0.500 & 0.667 \\
+				& spam & 0.001 & 1.000 & 0.001 \\
+			\hline
+			1,000 & ham  & n/a & n/a & n/a \\
+			      & spam & n/a & n/a & n/a \\
+			\hline
+			2,500 & ham  & n/a & n/a & n/a \\
+				  & spam & n/a & n/a & n/a \\
+			\hline
+			5,000 & ham  & n/a & n/a & n/a \\
+				  & spam & n/a & n/a & n/a \\
+			\hline
+			7,500 & ham  & n/a & n/a & n/a \\
+				  & spam & n/a & n/a & n/a \\
+			\hline
+			10,00 & ham  & n/a & n/a & n/a \\
+				  & spam & n/a & n/a & n/a \\
+		\end{tabular}
+	\end{table}
+	
+	PMI consistently performed miserably which is probably partially due to the wildly varying email topics and writing styles first between "spam" and "ham" then also within the classes. This would make scoring on PMI extraordinarily difficult. The confusion matrices showed that models trained on PMI-scored bigrams predicted everything as "ham" and nothing as "spam", with the exception of the first model where the errors were actually split between the two classes but still equated to over a 50\% error rate. Additionally, because of their abysmal performance, precision, recall, and F1 were not able to be calculated due to division by zero. Frequency was a different story. Instead of increasing accuracy to a point of diminishing returns, as was seen with unigrams, frequency-scored bigrams showed a steady increase up to the top 10,000 vocabulary size and finally dethroned the baseline model with 3,000 tokens by 0.20\% in average accuracy and around 0.2 in F1. Below is the confusion matrix for this top performing model showing only 103 emails incorrectly classified. This is an improvement of six emails over the baseline model with 3,000 tokens.
+
+	\begin{table}[H]
+		\centering
+		\caption{10.000 Frequency-Scored Bigrams Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,406 (46.9\%) & 94 (3.1\%) \\
+			spam & 9 (0.3\%) & 1,491 (49.7\%)
+		\end{tabular}
+	\end{table}
+	
+	Due to these results, PMI was no longer considered a viable option for this classification task. The next two models used 10,000 bigrams. One used the custom tokenizer described above; the other used the custom tokenizer and removed stop words:
+	
+	\begin{table}[H]
+		\centering
+		\caption{10,000 Frequency-Score Bigrams with Custom Tokenization Model Performance}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Custom Tokenization & 94.43\% \\
+			Custom Tokenization \& Stop Word Removal & 84.60\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+		\hline
+		\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Custom Tokenization & ham  & 0.972 & 0.921 & 0.946 \\
+								& spam & 0.917 & 0.970 & 0.943 \\
+			\hline
+			Custom Tokenization \& Stop Word Removal & ham  & 0.992 & 0.768 & 0.866 \\
+											      	 & spam & 0.700 & 0.989 & 0.820
+		\end{tabular}
+	\end{table}
+
+	The model retaining stop words performed the best but not as well as the best performing model thus far. Below is its confusion matrix showing an increase in incorrectly classified emails:
+	
+	\begin{table}[H]
+		\centering
+		\caption{10.000 Frequency-Scored Bigrams \& Custom Tokenizer Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,458 (48.8\%) & 42 (1.4\%) \\
+			spam & 125 (4.2\%) & 1,375 (45.8\%)
+		\end{tabular}
+	\end{table}
+
+	\subsubsection{Final Evaluation Breakdown}
+	
+	Having tested several model iterations, the best two are as follows:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Top Performing Models}
+		\begin{tabular}{ll}
+			Model & Accuracy \\
+			\hline
+			Baseline with 3,000 Tokens & 96.37\% \\
+			10,000 Frequency-Scores Bigrams & 96.57\%
+		\end{tabular}
+	\end{table}
+
+	Both models, though, were built using boolean bag of words representations. One final attempt at improvement as made using frequency-based bag of words representations:
+
+	\begin{table}[H]
+		\centering
+		\caption{Best Performing Models with Frequency BoW}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Baseline with 3,000 Tokens & 96.57\% \\
+			10,000 Frequency-Scores Bigrams & 96.47\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			\hline
+			\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Baseline with 3,000 Tokens & ham  & 0.936 & 0.995 & 0.965 \\
+									   & spam & 0.995 & 0.940 & 0.967 \\
+			\hline
+			10,000 Frequency-Scores Bigrams & ham  & 0.936 & 0.993 & 0.964 \\
+			                                & spam & 0.993 & 0.939 & 0.966 \\
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{Baseline with 3,000 Tokens Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,404 (46.8\%) & 96 (3.2\%) \\
+			spam & 7 (0.2\%) & 1,493 (49.8\%)
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{10,000 Frequency-Scores Bigrams Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,406 (46.8\%) & 96 (3.2\%) \\
+			spam & 10 (0.3\%) & 1,490 (49.7\%)
+		\end{tabular}
+	\end{table}
+
+	Frequency-based bag of words put the baseline model with 3,000 tokens on par with the boolean-based bigrams model. However, frequency bag of words caused the bigrams model performance to degrade.
+	
+	\section{Discussion of Results}
+	
+	\subsection{General Discussion}
+	
+	After testing several different model configurations, the best two were:
+	
+	\begin{enumerate}
+		\item 10,000 Frequency-Scored Bigrams with Boolean Bag of Words
+		\item Baseline with 3,000 Tokens and Frequency Bag of Words
+	\end{enumerate}
+
+	Both achieved an accuracy of 96.57\%, marginal differences in precision and recall, and identical F1 making declaring one over the other the best based only on metrics somewhat pointless. However, there is a claim to be made that, in fact, the baseline model with 3,000 tokens and frequency based bag of words is the most optimal. The argument for this is purely computational. 3,000 single tokens are easier and take less time to chew through than 10,000 bigrams. Additionally, there are more steps and computations that have to take place in order to generate the bigrams and bigram distribution. In terms of raw runtime, the baseline model took a fraction of the time to finish training and evaluating than the bigram model. Lastly, the baseline model was able to achieve the same accuracy the bigram model did with 7,000 fewer features making it much more efficient. 
+	
+	As one last attempt at improvement, combining both the 3,000 unigram frequency-based bag of words and 10,000 bigram boolean-based bag of words features also did yield an improvement with 97.30\% average accuracy; yet higher precision, recall, and F1; and only 80 incorrectly classified emails making it by far the best performing model tested:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Combined 3,000 Unigrams \& 10,000 Bigrams Model Performance}
+		\begin{tabular}{llll}
+			     & Precision & Recall & F1 \\
+			\hline
+			ham  & 0.998 & 0.951 & 0.974 \\
+			spam & 0.949 & 0.998 & 0.973
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{Combined 3,000 Unigrams \& 10,000 Bigrams Words Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,423 (47.4\%) & 77 (2.6\%) \\
+			spam & 3 (0.1\%) & 1,497 (49.8\%)
+		\end{tabular}
+	\end{table}
+	
+
+	Despite this, though, there were still several questions left to be answered as to why the NLTK tokenizer without any modification of the text whatsoever beat out so many other other tokenization and text modification strategies.
+	
+	\subsection{Importance of Punctuation}
+	
+	One of the more stunning discoveries was that removing punctuation made the models worse. This seems to be somewhat counterintuitive given experience with other text processing and classification tasks; however, upon examination of the data, it becomes a little clearer why. Below is a scatter plot of punctuation marks found in the top 500 tokens from both “ham” and “spam” emails:
+	
+	\includegraphics{ham_vs_spam_punc_freqs}
+	
+	This combined with consistent dips in accuracy when removed suggest that there are only a small handful of punctuation marks that are seriously driving the difference between “ham” and “spam” to the point that removing them  impacted model performance. In fact, the hyphen, which is the top occurring punctuation mark in the “ham” emails, is also the top occurring token by nearly a factor of two. The hyphen occurs 31,194 times in “ham” emails while the second highest occurring token is the forward slash which occurs 15,806 times. In contrast, hyphen is not at all one of the top occurring tokens in the “spam” emails. Their top occurring token is the period at 19,517 times, and the second highest occurring token is the comma at 11,251 times. Jenson-Shannon distance was calculated on these two distributions of punctuation marks. This metric is a number between zero and one and measures the similarity between two distributions. Zero is identical; one is completely different. The calculation came to 0.32, which is not extremely high, but seems to be enough to move the needle in terms of model accuracy.
+
+	\subsection{Importance of Stop Words}
+	
+	Stop words were only removed in a couple of the test models, but their removal from both decreased model performance: another somewhat counterintuitive outcome. This would suggest there is some kind of difference in stop word usage between “ham” and “spam” emails. Below is a scatter plot showing the frequency of stop words in the top 500 occurring tokens from both “ham” and “spam”:
+	
+	\includegraphics{ham_vs_spam_stop_word_freqs_500}
+	
+	To get another view of the difference, Jenson-Shannon distance was calculated for the two distributions as well. The stop words from the top 500 tokens have a Jenson-Shannon distance of 0.19, so they are not completely different, but they are definitely not the same. Cutting off some of the tail and recalculating for stop words in the top 100 tokens produced a Jenson-Shannon distance of 0.27 and the below scatter plot:
+	
+	\includegraphics{ham_vs_spam_stop_word_freqs_200}
+	
+	\subsection{Somewhat Minimal Importance of Word Frequencies}
+	
+	Although one of the top performing models used word frequency bag of words representations, its performance relative to models using boolean bag of words representations was extremely minimal. This suggests that the vast majority of tokens within each individual email only occurred once. To determine this, the average frequency for each token in each email per type was calculated. The maximum average frequency of any token in the “ham” texts was 56 times and 73 times for “spam”. However, if quantiles are calculated, it is not until the 72nd quantile that the average frequency of a token in “ham” is over zero whereas it is the 14th quantile for “spam”. Also for “spam”, the average frequency is one up to the 88th quantile where it just edges over one to 1.07. This suggests two things:
+	
+	\begin{enumerate}
+		\item As expected, for the vast majority of tokens, they either occur once in an email or not at all showing why frequency bag of words representations had such a minimal effect on accuracy.
+		\item A very small percentage of tokens in both “ham” and “spam” that occurred more than once per email on average seem to be the drivers for the slight improvement in accuracy for frequency bag of words representation over the boolean variant.
+	\end{enumerate}
+
+	\subsection{Proof of Concept Models}
+	To really drive home the importance of the above conclusions, three more models were trained. The first only uses frequency of punctuation marks as features; the second only uses frequency of stop words. The third combines them together:
+	
+	\begin{table}[H]
+		\centering
+		\caption{Proof of Concept Model Performance}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Punctuation & 83.23\% \\
+			Stop Words & 79.90\% \\
+			Punctuation \& Stop Words & 88.50\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			\hline
+			\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Punctuation & ham  & 0.795 & 0.860 & 0.826 \\
+				   	    & spam & 0.871 & 0.809 & 0.839 \\
+			\hline
+			Stop Words & ham  & 0.718 & 0.857 & 0.781 \\
+					   & spam & 0.880 & 0.757 & 0.814 \\
+			\hline
+			Punctuation \& Stop Words & ham  & 0.834 & 0.928 & 0.879 \\
+									  & spam & 0.935 & 0.849 & 0.890
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{Punctuation \& Stop Words Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,251 (41.7\%) & 249 (8.3\%) \\
+			spam & 97 (3.2\%) & 1,403 (46.8\%)
+		\end{tabular}
+	\end{table}
+
+	Obviously, these fall short of the top performing models; however, the fact that nearly 90\% accuracy and 346 emails classified incorrectly can be achieved using only punctuation and stop words, two classes of tokens that would normally otherwise be removed, truly shows something about the nature and style differences of the “ham” and “spam” emails in this particular corpus especially considering the number of features compared to the top performing models: 242 total features.
+	
+	\section{Experiments with SciKit-Learn}
+	
+	All of the above experiments were conducted using NLTK's Naive Bayes classifier. As one final experiment, three more models were trained using SciKit-Learn's Multinomial Naive Bayes classifier. These models used the features from the baseline model with 3,000 words and frequency-based bag of words, the bigram model with 10,000 features and boolean-based bag of words, and the model using only frequency-based punctuation and stop words bag of words. The results are below:
+	
+	\begin{table}[H]
+		\centering
+		\caption{SciKit-Learn Experiments}
+		\begin{tabular}{ll}
+			Model & Average Accuracy \\
+			\hline
+			Baseline with 3,000 Tokens and Frequency Bag of Words & 94.40\% \\
+			10,000 Frequency-Scored Bigrams with Boolean Bag of Words & 96.00\% \\
+			Punctuation \& Stop Words & 76.40\%
+		\end{tabular}
+		\begin{tabular}{l|llll}
+			\hline
+			\hline
+			Model & & Precision & Recall & F1 \\
+			\hline
+			Baseline with 3,000 Tokens and Frequency Bag of Words & ham  & 0.917 & 0.968 & 0.942 \\
+			& spam & 0.970 & 0.921 & 0.945 \\
+			\hline
+			10,000 Frequency-Scored Bigrams with Boolean Bag of Words & ham  & 0.961 & 0.959 & 0.960 \\
+			& spam & 0.959 & 0.961 & 0.960 \\
+			\hline
+			Punctuation \& Stop Words & ham  & 0.668 & 0.827 & 0.739 \\
+			& spam & 0.860 & 0.721 & 0.785
+		\end{tabular}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\caption{10,000 Frequency-Scored Bigrams with Frequency Bag of Words (SciKit-Learn) Confusion Matrix}
+		\begin{tabular}{l|ll}
+			& ham & spam \\
+			\hline
+			ham & 1,441 & 59 \\
+			spam & 61 & 1,439
+		\end{tabular}
+	\end{table}
+
+	Interestingly, none of the models performed as well as their NLTK variants. However, SciKit-Learn did do better by 1.8\% in average accuracy and slighly better in F1 with bigrams than it did with unigrams. These models were also significantly faster to train and test.
+
+	\section{Conclusions}
+	
+	In terms of a traditional NLP task, "spam" detection is certainly an odd one, at least with this data set. First, probably due to the different topics and writing styles, it takes significantly more bigrams to perform the same task a unigram-based model with fewer features can perform: around a 7,000 feature difference between the two approaches. Combining the two feature sets actually did show some kind of improvement; however, it came at a pretty significant cost in terms of productionalizing such a model. The bigram model on its own already took significantly longer to train and test than the unigram model did. Combining the features and ending up with a model with 13,000 features only made that runtime even worse. A customer will not want to wait that long should such a model be deployed for on-the-fly "spam" detection especially if the email is somewhat mission critical and time for it to arrive in an inbox of paramount importance. The very, very slight improvement in average accuracy over the unigram model probably does not warrant such a runtime increase. As for why the bigram-based models required so many more features than the unigram ones, it could be due to the nature of an email data set. These are, purely by their nature, heterogeneous in terms of writing styles and topics. The benefit of using bigrams comes in that they provide context to the model in the form of two tokens that together form a feature. This helps naturally in cases where the texts within each class share some kind of overarching theme, but here, that just seems to have not been the case. This led to the unigram models being significantly more efficient overall.
+	
+	This project did, though, reveal something very interesting. With a five to six percent hit to accuracy, a model to detect "spam" could be trained using only punctuation marks and stop words, and it runs fast. This particular result was simply stunning. Additionally, accuracy on the individual folds did not vary too much suggesting that the model was not over- or underfitting on the training data for the particular fold; this was a legitimate result.
+	
+	
+\end{document}
